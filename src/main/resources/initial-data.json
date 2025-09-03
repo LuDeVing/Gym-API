@@ -1,0 +1,64 @@
+{
+  "trainers": [
+    {
+      "userId": 1,
+      "firstName": "John",
+      "lastName": "Doe",
+      "username": "jdoe",
+      "password": "password123",
+      "isActive": true,
+      "specialization": "Yoga"
+    },
+    {
+      "userId": 2,
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "username": "jsmith",
+      "password": "pass456",
+      "isActive": true,
+      "specialization": "Strength Training"
+    }
+  ],
+  "trainees": [
+    {
+      "userId": 1,
+      "firstName": "Alice",
+      "lastName": "Brown",
+      "username": "abrown",
+      "password": "mypassword",
+      "isActive": true,
+      "dateOfBirth": "1995-06-15",
+      "address": "123 Main St"
+    },
+    {
+      "userId": 2,
+      "firstName": "Bob",
+      "lastName": "Green",
+      "username": "bgreen",
+      "password": "securepass",
+      "isActive": false,
+      "dateOfBirth": "1990-03-20",
+      "address": "456 Elm St"
+    }
+  ],
+  "trainings": [
+    {
+      "trainingId": 1,
+      "traineeId": 1,
+      "trainerId": 1,
+      "trainingName": "Morning Yoga",
+      "trainingTypeName": "Yoga",
+      "trainingDate": "2025-08-10",
+      "trainingDuration": 60
+    },
+    {
+      "trainingId": 2,
+      "traineeId": 2,
+      "trainerId": 2,
+      "trainingName": "Weightlifting Basics",
+      "trainingTypeName": "Strength",
+      "trainingDate": "2025-08-12",
+      "trainingDuration": 45
+    }
+  ]
+}

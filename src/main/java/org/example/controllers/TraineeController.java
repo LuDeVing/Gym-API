@@ -16,6 +16,7 @@ import org.example.responseBodies.TrainerDTO;
 import org.example.responseBodies.TrainingDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,18 +39,18 @@ public class TraineeController {
 
     @PostMapping("/create")
     @Operation(summary = "Add a new trainee, you don't need to be logged in as one",
-        responses = {
-            @ApiResponse(
-                    responseCode = "200",
-                    description = "Successfully created new trainee profile",
-                    content = @Content(mediaType = "application/json", schema = @Schema(
-                            type = "object",
-                            additionalPropertiesSchema = String.class
+            responses = {
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "Successfully created new trainee profile",
+                            content = @Content(mediaType = "application/json", schema = @Schema(
+                                    type = "object",
+                                    additionalPropertiesSchema = String.class
+                            )
+                            )
                     )
-            )
-            )
 
-        }
+            }
     )
     public ResponseEntity<Map<String, String>> createTrainee(
             @RequestParam String firstName,
@@ -67,6 +68,8 @@ public class TraineeController {
         Map<String, String> result = new HashMap<>();
         result.put("username", trainee.getUsername());
         result.put("password", trainee.getPassword());
+
+        logger.info("new trainee with username: {} created, transactionID={}", trainee.getUsername(), MDC.get("transactionID"));
 
         return ResponseEntity.ok(result);
     }
@@ -95,21 +98,21 @@ public class TraineeController {
             @RequestParam String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("GET /trainee/{} called", username);
+        logger.info("GET /trainee/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())){
-            logger.warn("You are not logged in as user: {}", username);
+            logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
 
         if(trainee.isEmpty()){
-            logger.warn("Trainee {} not found, returning 404", username);
+            logger.warn("Trainee {} not found, returning 404, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.notFound().build();
         }
 
-        logger.info("Returning 200 with trainee {}", trainee.get().getUsername());
+        logger.info("Returning 200 with trainee {}, transactionID={}", trainee.get().getUsername(), MDC.get("transactionID"));
 
         return ResponseEntity.ok(
                 Map.of(
@@ -158,17 +161,17 @@ public class TraineeController {
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ){
 
-        logger.info("PUT /trainee/{} called", username);
+        logger.info("PUT /trainee/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
 
         if (!Objects.equals(username, user.getUsername())){
-            logger.warn("You are not logged in as user: {}, cannot update", username);
+            logger.warn("You are not logged in as user: {}, cannot update, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         if(trainee.isEmpty()){
-            logger.warn("Your username \"{}\" is not in database", username);
+            logger.warn("Your username \"{}\" is not in database, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
@@ -216,10 +219,10 @@ public class TraineeController {
             @RequestParam String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("DELETE /trainee/{} called", username);
+        logger.info("DELETE /trainee/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
-            logger.warn("User {} tried to delete another trainee", user.getUsername());
+            logger.warn("User {} tried to delete another trainee, transactionID={}", user.getUsername(), MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(Map.of("message", "You can only delete your own profile"));
         }
@@ -227,14 +230,14 @@ public class TraineeController {
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
 
         if (trainee.isEmpty()) {
-            logger.warn("Trainee {} not found", username);
+            logger.warn("Trainee {} not found, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Trainee not found"));
         }
 
         gymFacade.deleteTrainee(trainee.get().getUserId());
 
-        logger.info("Trainee {} deleted successfully", username);
+        logger.info("Trainee {} deleted successfully, transactionID={}", username, MDC.get("transactionID"));
         return ResponseEntity.ok(Map.of("message", "Trainee deleted successfully"));
 
     }
@@ -265,10 +268,10 @@ public class TraineeController {
             @RequestParam boolean isActive,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("PATCH /trainee/activate called for {}", username);
+        logger.info("PATCH /trainee/activate called for {}, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
-            logger.warn("User {} tried to change active status for {}", user.getUsername(), username);
+            logger.warn("User {} tried to change active status for {}, transactionID={}", user.getUsername(), username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "You can only change your own active status"));
         }
@@ -276,7 +279,7 @@ public class TraineeController {
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
 
         if (trainee.isEmpty()) {
-            logger.warn("Trainee {} not found", username);
+            logger.warn("Trainee {} not found, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Trainee not found"));
         }
@@ -284,7 +287,7 @@ public class TraineeController {
         trainee.get().setActive(isActive);
         gymFacade.updateTrainee(trainee.get());
 
-        logger.info("Trainee {} active status updated to {}", username, isActive);
+        logger.info("Trainee {} active status updated to {}, transactionID={}", username, isActive, MDC.get("transactionID"));
         return ResponseEntity.ok(Map.of("message", "Trainee active status updated successfully"));
 
     }
@@ -314,16 +317,16 @@ public class TraineeController {
             @RequestParam String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("GET /trainee/not-assigned called for {}", username);
+        logger.info("GET /trainee/not-assigned called for {}, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
-            logger.warn("You are not logged in as user: {}", username);
+            logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
         if (trainee.isEmpty()) {
-            logger.warn("Trainee {} not found", username);
+            logger.warn("Trainee {} not found, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
@@ -361,16 +364,16 @@ public class TraineeController {
             @RequestParam(required = false) String trainerName,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("GET /trainee/trainings called for {}", username);
+        logger.info("GET /trainee/trainings called for {}, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
-            logger.warn("You are not logged in as user: {}", username);
+            logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         var trainee = gymFacade.selectByTraineeName(username);
         if (trainee.isEmpty()) {
-            logger.warn("Trainee {} not found", username);
+            logger.warn("Trainee {} not found, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 

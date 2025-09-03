@@ -14,6 +14,7 @@ import org.example.responseBodies.TraineeDTO;
 import org.example.responseBodies.TrainingDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -64,6 +65,8 @@ public class TrainerController {
                 "password", trainer.getPassword()
         );
 
+        logger.info("new trainer with username: {} created, transactionID={}", trainer.getUsername(), MDC.get("transactionID"));
+
         return ResponseEntity.ok(result);
     }
 
@@ -92,21 +95,21 @@ public class TrainerController {
             @RequestParam String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("GET /trainer/{} called", username);
+        logger.info("GET /trainer/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
-            logger.warn("You are not logged in as user: {}", username);
+            logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         Optional<Trainer> trainer = gymFacade.selectTrainerByUserName(username);
 
         if (trainer.isEmpty()) {
-            logger.warn("Trainer {} not found, returning 404", username);
+            logger.warn("Trainer {} not found, returning 404, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.notFound().build();
         }
 
-        logger.info("Returning 200 with trainer {}", trainer.get().getUsername());
+        logger.info("Returning 200 with trainer {}, transactionID={}", trainer.get().getUsername(), MDC.get("transactionID"));
         return ResponseEntity.ok(
                 Map.of(
                         "Trainer", new TrainerDTO(trainer.get()),
@@ -147,17 +150,17 @@ public class TrainerController {
             @RequestParam boolean isActive,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("PUT /trainer/{} called", username);
+        logger.info("PUT /trainer/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         Optional<Trainer> trainer = gymFacade.selectTrainerByUserName(username);
 
         if (!Objects.equals(username, user.getUsername())) {
-            logger.warn("You are not logged in as user: {}, cannot update", username);
+            logger.warn("You are not logged in as user: {}, cannot update, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
 
         if (trainer.isEmpty()) {
-            logger.warn("Your username \"{}\" is not in database", username);
+            logger.warn("Your username \"{}\" is not in database, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
 
@@ -198,10 +201,10 @@ public class TrainerController {
             @RequestParam boolean isActive,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("PATCH /trainer/activate called for {}", username);
+        logger.info("PATCH /trainer/activate called for {}, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
-            logger.warn("User {} tried to change active status for {}", user.getUsername(), username);
+            logger.warn("User {} tried to change active status for {}, transactionID={}", user.getUsername(), username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "You can only change your own active status"));
         }
@@ -209,7 +212,7 @@ public class TrainerController {
         Optional<Trainer> trainer = gymFacade.selectTrainerByUserName(username);
 
         if (trainer.isEmpty()) {
-            logger.warn("Trainer {} not found", username);
+            logger.warn("Trainer {} not found, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(Map.of("message", "Trainer not found"));
         }
@@ -217,7 +220,7 @@ public class TrainerController {
         trainer.get().setActive(isActive);
         gymFacade.updateTrainer(trainer.get());
 
-        logger.info("Trainer {} active status updated to {}", username, isActive);
+        logger.info("Trainer {} active status updated to {}, transactionID={}", username, isActive, MDC.get("transactionID"));
         return ResponseEntity.ok(Map.of("message", "Trainer active status updated successfully"));
     }
 
@@ -249,7 +252,10 @@ public class TrainerController {
             @RequestParam(required = false) String traineeName,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
+        logger.info("GET /trainer/trainings called for {}, transactionID={}", username, MDC.get("transactionID"));
+
         if (!username.equals(user.getUsername())) {
+            logger.warn("You can only view your own trainings, user={}, transactionID={}", username, MDC.get("transactionID"));
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "You can only view your own trainings"));
         }

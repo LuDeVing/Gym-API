@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -19,7 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
-class ControllersIntegrationTest {
+class GymApiApplicationTests {
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -80,6 +79,16 @@ class ControllersIntegrationTest {
 						.header("Authorization", authHeader()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.Trainee.firstName").value("FNM"));
+	}
+
+	@Test
+	void delete_trainee() throws Exception {
+
+		mockMvc.perform(delete("/trainee/delete")
+					.param("username", username)
+					.header("Authorization", authHeader())
+		).andExpect(status().isOk());
+
 	}
 
 

@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.example.facade.GymFacade;
 import org.example.model.Trainee;
 import org.example.model.Trainer;
+import org.example.requestBodies.LoginRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,7 +38,7 @@ public class LoginController {
     @Autowired
     private GymFacade gymFacade;
 
-    @GetMapping("/login")
+    @PostMapping("/login")
     @Operation(
             summary = "Login with username and password",
             responses = {
@@ -53,10 +54,11 @@ public class LoginController {
                     )
             }
     )
-    public ResponseEntity<?> login(@RequestParam String username, @RequestParam String password) {
+    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
+
         try {
             Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(username, password)
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
             );
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -67,7 +69,7 @@ public class LoginController {
         }
     }
 
-    @PutMapping("/changePassword")
+    @PutMapping("/users/{username}/password")
     @Operation(
             summary = "Change password (user must be logged in as themselves)",
             responses = {
@@ -88,8 +90,8 @@ public class LoginController {
                     )
             }
     )
-    public ResponseEntity<?> login(
-            @RequestParam String username,
+    public ResponseEntity<?> changePassword(
+            @PathVariable String username,
             @RequestParam String newPassword,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {

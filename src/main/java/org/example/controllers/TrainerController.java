@@ -28,7 +28,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping(value = "trainer", produces = {"application/JSON"})
+@RequestMapping(value = "/trainers", produces = {"application/json"})
 @Tag(name = "Trainer API", description = "Operations for creating, updating, retrieving and deleting trainers in application")
 public class TrainerController {
 
@@ -37,12 +37,12 @@ public class TrainerController {
     @Autowired
     private GymFacade gymFacade;
 
-    @PostMapping("/create")
+    @PostMapping
     @Operation(
             summary = "Add a new trainer, you don't need to be logged in as one",
             responses = {
                     @ApiResponse(
-                            responseCode = "200",
+                            responseCode = "201",
                             description = "Successfully created new trainer profile",
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
                     )
@@ -67,10 +67,10 @@ public class TrainerController {
 
         logger.info("new trainer with username: {} created, transactionID={}", trainer.getUsername(), MDC.get("transactionID"));
 
-        return ResponseEntity.ok(result);
+        return ResponseEntity.status(201).body(result);
     }
 
-    @GetMapping("/get")
+    @GetMapping("/{username}")
     @Operation(
             summary = "Get trainer info, if you are logged in as trainer",
             responses = {
@@ -80,8 +80,8 @@ public class TrainerController {
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
                     ),
                     @ApiResponse(
-                            responseCode = "401",
-                            description = "User is not authorized to get this trainer info",
+                            responseCode = "403",
+                            description = "User is forbidden to get this trainer info",
                             content = @Content(mediaType = "application/json")
                     ),
                     @ApiResponse(
@@ -92,14 +92,14 @@ public class TrainerController {
             }
     )
     public ResponseEntity<?> getTrainer(
-            @RequestParam String username,
+            @PathVariable String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("GET /trainer/{} called, transactionID={}", username, MDC.get("transactionID"));
+        logger.info("GET /trainers/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         Optional<Trainer> trainer = gymFacade.selectTrainerByUserName(username);
@@ -113,7 +113,7 @@ public class TrainerController {
         return ResponseEntity.ok(
                 Map.of(
                         "Trainer", new TrainerDTO(trainer.get()),
-                        "Trainees",  trainer.get().getTrainings().stream()
+                        "Trainees", trainer.get().getTrainings().stream()
                                 .map(Training::getTrainee)
                                 .distinct()
                                 .map(TraineeDTO::new)
@@ -122,7 +122,7 @@ public class TrainerController {
         );
     }
 
-    @PutMapping("/update")
+    @PutMapping("/{username}")
     @Operation(
             summary = "Update trainer info if logged in as that trainer",
             responses = {
@@ -132,8 +132,8 @@ public class TrainerController {
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = TrainerDTO.class))
                     ),
                     @ApiResponse(
-                            responseCode = "401",
-                            description = "User is not authorized to update this trainer",
+                            responseCode = "403",
+                            description = "User is forbidden to update this trainer",
                             content = @Content(mediaType = "application/json")
                     ),
                     @ApiResponse(
@@ -144,19 +144,19 @@ public class TrainerController {
             }
     )
     public ResponseEntity<?> updateTrainer(
-            @RequestParam String username,
+            @PathVariable String username,
             @RequestParam String firstName,
             @RequestParam String lastName,
             @RequestParam boolean isActive,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("PUT /trainer/{} called, transactionID={}", username, MDC.get("transactionID"));
+        logger.info("PUT /trainers/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         Optional<Trainer> trainer = gymFacade.selectTrainerByUserName(username);
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("You are not logged in as user: {}, cannot update, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         if (trainer.isEmpty()) {
@@ -170,12 +170,10 @@ public class TrainerController {
 
         gymFacade.updateTrainer(trainer.get());
 
-        return ResponseEntity.ok(
-                Map.of("Trainer", new TrainerDTO(trainer.get()))
-        );
+        return ResponseEntity.ok(Map.of("Trainer", new TrainerDTO(trainer.get())));
     }
 
-    @PatchMapping("/activate")
+    @PatchMapping("/{username}/activate")
     @Operation(
             summary = "Activate or deactivate trainer (only for self)",
             responses = {
@@ -197,11 +195,11 @@ public class TrainerController {
             }
     )
     public ResponseEntity<?> activateTrainer(
-            @RequestParam String username,
+            @PathVariable String username,
             @RequestParam boolean isActive,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("PATCH /trainer/activate called for {}, transactionID={}", username, MDC.get("transactionID"));
+        logger.info("PATCH /trainers/{}/activate called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("User {} tried to change active status for {}, transactionID={}", user.getUsername(), username, MDC.get("transactionID"));
@@ -224,7 +222,7 @@ public class TrainerController {
         return ResponseEntity.ok(Map.of("message", "Trainer active status updated successfully"));
     }
 
-    @GetMapping("/trainings")
+    @GetMapping("/{username}/trainings")
     @Operation(
             summary = "Get trainer trainings with optional filters (only self)",
             responses = {
@@ -234,8 +232,8 @@ public class TrainerController {
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
                     ),
                     @ApiResponse(
-                            responseCode = "401",
-                            description = "Unauthorized access",
+                            responseCode = "403",
+                            description = "Forbidden access",
                             content = @Content(mediaType = "application/json")
                     ),
                     @ApiResponse(
@@ -246,13 +244,13 @@ public class TrainerController {
             }
     )
     public ResponseEntity<?> getTrainerTrainings(
-            @RequestParam String username,
+            @PathVariable String username,
             @RequestParam(required = false) LocalDate periodFrom,
             @RequestParam(required = false) LocalDate periodTo,
             @RequestParam(required = false) String traineeName,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("GET /trainer/trainings called for {}, transactionID={}", username, MDC.get("transactionID"));
+        logger.info("GET /trainers/{}/trainings called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!username.equals(user.getUsername())) {
             logger.warn("You can only view your own trainings, user={}, transactionID={}", username, MDC.get("transactionID"));

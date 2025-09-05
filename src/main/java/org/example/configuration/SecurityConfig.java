@@ -4,6 +4,7 @@ import org.example.authorization.mainUserDetailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -21,22 +22,14 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http.authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(HttpMethod.POST, "/trainees").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/trainers").permitAll()
                         .requestMatchers(
                                 "/swagger-ui/**", "/v3/api-docs/**",
-                                "/auth/**", "/trainee/create",
-                                "/trainer/create", "/trainings/getTrainingTypes"
-                        ).permitAll()
+                                "/auth/**", "/trainings/types"
+                        )
+                        .permitAll()
                         .anyRequest().authenticated()
-                )
-                .formLogin(form -> form
-                        .loginProcessingUrl("/auth/login")
-                        .defaultSuccessUrl("/loginSuccess")
-                        .failureUrl("/loginFailure")
-                )
-                .logout(logout -> logout
-                        .logoutUrl("/auth/logout")
-                        .logoutSuccessUrl("/auth/login")
-
                 )
                 .httpBasic(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable);

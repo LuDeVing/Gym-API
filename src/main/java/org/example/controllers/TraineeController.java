@@ -28,7 +28,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping(value = "trainee", produces = {"application/JSON"})
+@RequestMapping(value = "trainees", produces = {"application/JSON"})
 @Tag(name = "Trainee API", description = "Operations for creating, updating, retrieving and deleting trainees in application")
 public class TraineeController {
 
@@ -37,11 +37,11 @@ public class TraineeController {
     @Autowired
     private GymFacade gymFacade;
 
-    @PostMapping("/create")
+    @PostMapping
     @Operation(summary = "Add a new trainee, you don't need to be logged in as one",
             responses = {
                     @ApiResponse(
-                            responseCode = "200",
+                            responseCode = "201",
                             description = "Successfully created new trainee profile",
                             content = @Content(mediaType = "application/json", schema = @Schema(
                                     type = "object",
@@ -71,10 +71,10 @@ public class TraineeController {
 
         logger.info("new trainee with username: {} created, transactionID={}", trainee.getUsername(), MDC.get("transactionID"));
 
-        return ResponseEntity.ok(result);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
-    @GetMapping("/get")
+    @GetMapping("/{username}")
     @Operation(summary = "Get trainee info, if you are logged in as trainee",
             responses = {
                     @ApiResponse(
@@ -95,14 +95,14 @@ public class TraineeController {
             }
     )
     public ResponseEntity<?> getTrainee(
-            @RequestParam String username,
+            @PathVariable String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
         logger.info("GET /trainee/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())){
             logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
@@ -126,7 +126,7 @@ public class TraineeController {
         );
     }
 
-    @PutMapping("/update")
+    @PutMapping("/{username}")
     @Operation(
             summary = "Update trainee info if logged in as that trainee",
             responses = {
@@ -139,7 +139,7 @@ public class TraineeController {
                             )
                     ),
                     @ApiResponse(
-                            responseCode = "401",
+                            responseCode = "403",
                             description = "User is not authorized to update this trainee",
                             content = @Content(mediaType = "application/json")
                     ),
@@ -151,7 +151,7 @@ public class TraineeController {
             }
     )
     public ResponseEntity<?> updateTrainee(
-            @RequestParam String username,
+            @PathVariable String username,
             @RequestParam String firstName,
             @RequestParam String lastName,
             @RequestParam(required = false) LocalDate dateOfBirth,
@@ -167,7 +167,7 @@ public class TraineeController {
 
         if (!Objects.equals(username, user.getUsername())){
             logger.warn("You are not logged in as user: {}, cannot update, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         if(trainee.isEmpty()){
@@ -187,16 +187,16 @@ public class TraineeController {
 
         gymFacade.updateTrainee(trainee.get());
 
-        return ResponseEntity.ok(Map.of("Trainee", new TraineeDTO(trainee.get())));
+        return ResponseEntity.status(HttpStatus.OK).body(Map.of("Trainee", new TraineeDTO(trainee.get())));
 
     }
 
-    @DeleteMapping("/delete")
+    @DeleteMapping("/{username}")
     @Operation(
             summary = "delete trainee info if logged in as that trainee",
             responses = {
                     @ApiResponse(
-                            responseCode = "200",
+                            responseCode = "204",
                             description = "Successfully deleted trainee information",
                             content = @Content(
                                     mediaType = "application/json",
@@ -204,7 +204,7 @@ public class TraineeController {
                             )
                     ),
                     @ApiResponse(
-                            responseCode = "401",
+                            responseCode = "403",
                             description = "User is not authorized to delete this trainee",
                             content = @Content(mediaType = "application/json")
                     ),
@@ -216,14 +216,14 @@ public class TraineeController {
             }
     )
     public ResponseEntity<?> deleteTrainee(
-            @RequestParam String username,
+            @PathVariable String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
         logger.info("DELETE /trainee/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("User {} tried to delete another trainee, transactionID={}", user.getUsername(), MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("message", "You can only delete your own profile"));
         }
 
@@ -238,11 +238,11 @@ public class TraineeController {
         gymFacade.deleteTrainee(trainee.get().getUserId());
 
         logger.info("Trainee {} deleted successfully, transactionID={}", username, MDC.get("transactionID"));
-        return ResponseEntity.ok(Map.of("message", "Trainee deleted successfully"));
+        return ResponseEntity.noContent().build();
 
     }
 
-    @PatchMapping("/activate")
+    @PatchMapping("/{username}/active")
     @Operation(
             summary = "Activate or deactivate trainee (only for self)",
             responses = {
@@ -264,7 +264,7 @@ public class TraineeController {
             }
     )
     public ResponseEntity<?> activateTrainee(
-            @RequestParam String username,
+            @PathVariable String username,
             @RequestParam boolean isActive,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
@@ -292,7 +292,7 @@ public class TraineeController {
 
     }
 
-    @GetMapping("/not-assigned")
+    @GetMapping("{username}/not-assigned-trainers")
     @Operation(
             summary = "Get trainers not assigned to the trainee (only self)",
             responses = {
@@ -302,7 +302,7 @@ public class TraineeController {
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
                     ),
                     @ApiResponse(
-                            responseCode = "401",
+                            responseCode = "403",
                             description = "Unauthorized access",
                             content = @Content(mediaType = "application/json")
                     ),
@@ -314,14 +314,14 @@ public class TraineeController {
             }
     )
     public ResponseEntity<?> getNotAssignedTrainers(
-            @RequestParam String username,
+            @PathVariable String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
         logger.info("GET /trainee/not-assigned called for {}, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
@@ -336,7 +336,7 @@ public class TraineeController {
         return ResponseEntity.ok(Map.of("Trainers", trainers));
     }
 
-    @GetMapping("/trainings")
+    @GetMapping("{username}/trainings")
     @Operation(
             summary = "Get trainee trainings with optional filters (only self)",
             responses = {
@@ -346,7 +346,7 @@ public class TraineeController {
                             content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
                     ),
                     @ApiResponse(
-                            responseCode = "401",
+                            responseCode = "403",
                             description = "Unauthorized access",
                             content = @Content(mediaType = "application/json")
                     ),
@@ -358,7 +358,7 @@ public class TraineeController {
             }
     )
     public ResponseEntity<?> getTraineeTrainings(
-            @RequestParam String username,
+            @PathVariable String username,
             @RequestParam(required = false) LocalDate periodFrom,
             @RequestParam(required = false) LocalDate periodTo,
             @RequestParam(required = false) String trainerName,
@@ -368,7 +368,7 @@ public class TraineeController {
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
         var trainee = gymFacade.selectByTraineeName(username);

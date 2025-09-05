@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -28,11 +29,10 @@ class GymApiApplicationTests {
 
 	@BeforeEach
 	void setup() throws Exception {
-
-		MvcResult result = mockMvc.perform(post("/trainee/create")
+		MvcResult result = mockMvc.perform(post("/trainees")
 						.param("firstName", "FNM")
 						.param("lastName", "LNM"))
-				.andExpect(status().isOk())
+				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.username").value("FNM.LNM"))
 				.andExpect(jsonPath("$.password").exists())
 				.andReturn();
@@ -48,8 +48,7 @@ class GymApiApplicationTests {
 
 	@Test
 	void getTrainee_afterCreation() throws Exception {
-		mockMvc.perform(get("/trainee/get")
-						.param("username", username)
+		mockMvc.perform(get("/trainees/{username}", username)
 						.header("Authorization", authHeader()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.Trainee.firstName").value("FNM"))
@@ -57,39 +56,49 @@ class GymApiApplicationTests {
 	}
 
 	@Test
-	void login_withCorrectCredentials_returns200() throws Exception {
-		mockMvc.perform(get("/auth/login")
-						.param("username", username)
-						.param("password", password))
-				.andExpect(status().isOk());
+	void login_withWrongPassword_returns401() throws Exception {
+		String loginJson = String.format("""
+            {
+                "username": "%s",
+                "password": "%s"
+            }
+            """, username, "wrong123");
+
+		mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(loginJson))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.message").value("Invalid username or password"));
 	}
 
 	@Test
-	void login_withWrongPassword_returns401() throws Exception {
-		mockMvc.perform(get("/auth/login")
-						.param("username", username)
-						.param("password", "wrong123"))
-				.andExpect(status().isUnauthorized());
+	void login_withCorrectCredentials_returns200() throws Exception {
+		String loginJson = String.format("""
+        {
+            "username": "%s",
+            "password": "%s"
+        }
+        """, username, password);
+
+		mockMvc.perform(post("/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(loginJson))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.message").value("Login successful"));
 	}
 
 	@Test
 	void get_firstName_withCorrectPassword_returns200() throws Exception {
-		mockMvc.perform(get("/trainee/get")
-						.param("username", username)
+		mockMvc.perform(get("/trainees/{username}", username)
 						.header("Authorization", authHeader()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.Trainee.firstName").value("FNM"));
 	}
 
 	@Test
-	void delete_trainee() throws Exception {
-
-		mockMvc.perform(delete("/trainee/delete")
-					.param("username", username)
-					.header("Authorization", authHeader())
-		).andExpect(status().isOk());
-
+	void delete_trainee_returns204() throws Exception {
+		mockMvc.perform(delete("/trainees/{username}", username)
+						.header("Authorization", authHeader()))
+				.andExpect(status().isNoContent());
 	}
-
-
 }

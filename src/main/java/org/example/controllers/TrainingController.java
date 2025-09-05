@@ -24,7 +24,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @RestController
-@RequestMapping(value = "trainee", produces = {"application/JSON"})
+@RequestMapping(value = "/trainings", produces = {"application/json"})
 @Tag(name = "Training API", description = "Operations for adding trainings and retrieving training types")
 public class TrainingController {
 
@@ -33,30 +33,14 @@ public class TrainingController {
     @Autowired
     private GymFacade gymFacade;
 
-    @PostMapping("/trainings/add")
+    @PostMapping
     @Operation(
             summary = "Add a new training session (trainer can only add trainings for themselves)",
             responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Training added successfully",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
-                    ),
-                    @ApiResponse(
-                            responseCode = "403",
-                            description = "User is not authorized to add this training",
-                            content = @Content(mediaType = "application/json")
-                    ),
-                    @ApiResponse(
-                            responseCode = "404",
-                            description = "Trainee or Trainer not found",
-                            content = @Content(mediaType = "application/json")
-                    ),
-                    @ApiResponse(
-                            responseCode = "500",
-                            description = "Failed to create training",
-                            content = @Content(mediaType = "application/json")
-                    )
+                    @ApiResponse(responseCode = "201", description = "Training added successfully"),
+                    @ApiResponse(responseCode = "403", description = "User is not authorized to add this training"),
+                    @ApiResponse(responseCode = "404", description = "Trainee or Trainer not found"),
+                    @ApiResponse(responseCode = "500", description = "Failed to create training")
             }
     )
     public ResponseEntity<?> addTraining(
@@ -67,7 +51,7 @@ public class TrainingController {
             @RequestParam int duration,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
     ) {
-        logger.info("POST /trainee/trainings/add called by {}, transactionID={}", trainerUsername, MDC.get("transactionID"));
+        logger.info("POST /trainings called by {}, transactionID={}", trainerUsername, MDC.get("transactionID"));
 
         if (!trainerUsername.equals(user.getUsername())) {
             logger.warn("User {} tried to add training as {}, transactionID={}", user.getUsername(), trainerUsername, MDC.get("transactionID"));
@@ -102,23 +86,18 @@ public class TrainingController {
                     .body(Map.of("message", "Failed to create training"));
         }
 
-        return ResponseEntity.ok(Map.of("message", "Training added successfully"));
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("message", "Training added successfully"));
     }
 
-    @PostMapping("/trainings/getTrainingTypes")
+    @GetMapping("/types")
     @Operation(
             summary = "Get all available training types",
             responses = {
-                    @ApiResponse(
-                            responseCode = "200",
-                            description = "Returns a list of all training types",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
-                    )
+                    @ApiResponse(responseCode = "200", description = "Returns a list of all training types")
             }
     )
     public ResponseEntity<?> getTrainingTypes() {
-        logger.info("POST /trainee/trainings/getTrainingTypes called, transactionID={}", MDC.get("transactionID"));
+        logger.info("GET /trainings/types called, transactionID={}", MDC.get("transactionID"));
         return ResponseEntity.ok(Map.of("Training Types", gymFacade.getAllTrainingTypes()));
     }
-
 }

@@ -5,18 +5,23 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.example.exceptions.ForbiddenOperationException;
+import org.example.exceptions.NotFoundException;
 import org.example.facade.GymFacade;
 import org.example.model.Trainer;
 import org.example.model.Training;
 import org.example.model.User;
+import org.example.requestBodies.CreateTrainerRequest;
+import org.example.requestBodies.UpdateActiveRequest;
+import org.example.requestBodies.UpdateTrainerRequest;
 import org.example.responseBodies.TrainerDTO;
 import org.example.responseBodies.TraineeDTO;
+import org.example.responseBodies.TrainerWithTraineesDTO;
 import org.example.responseBodies.TrainingDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -44,21 +49,23 @@ public class TrainerController {
                     @ApiResponse(
                             responseCode = "201",
                             description = "Successfully created new trainer profile",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
+                            content = @Content(mediaType = "application/json", schema = @Schema(
+                                    type = "object",
+                                    additionalPropertiesSchema = String.class
+                            )
+                            )
                     )
             }
     )
     public ResponseEntity<Map<String, String>> createTrainer(
-            @RequestParam String firstName,
-            @RequestParam String lastName,
-            @RequestParam String specialization
+            @RequestBody CreateTrainerRequest request
     ) {
         User user = new User();
-        user.setFirstName(firstName);
-        user.setLastName(lastName);
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
         user.setActive(true);
 
-        Trainer trainer = gymFacade.createTrainer(user, specialization);
+        Trainer trainer = gymFacade.createTrainer(user, request.getSpecialization());
 
         Map<String, String> result = Map.of(
                 "username", trainer.getUsername(),
@@ -77,7 +84,7 @@ public class TrainerController {
                     @ApiResponse(
                             responseCode = "200",
                             description = "Successfully returned profile information",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = TrainerWithTraineesDTO.class))
                     ),
                     @ApiResponse(
                             responseCode = "403",
@@ -91,36 +98,37 @@ public class TrainerController {
                     )
             }
     )
-    public ResponseEntity<?> getTrainer(
+    public ResponseEntity<TrainerWithTraineesDTO> getTrainer(
             @PathVariable String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
-    ) {
+    ) throws ForbiddenOperationException, NotFoundException {
         logger.info("GET /trainers/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            throw new ForbiddenOperationException("You are not logged in as this trainer");
         }
 
         Optional<Trainer> trainer = gymFacade.selectTrainerByUserName(username);
 
         if (trainer.isEmpty()) {
             logger.warn("Trainer {} not found, returning 404, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.notFound().build();
+            throw new NotFoundException("Trainer not found");
         }
 
-        logger.info("Returning 200 with trainer {}, transactionID={}", trainer.get().getUsername(), MDC.get("transactionID"));
-        return ResponseEntity.ok(
-                Map.of(
-                        "Trainer", new TrainerDTO(trainer.get()),
-                        "Trainees", trainer.get().getTrainings().stream()
-                                .map(Training::getTrainee)
-                                .distinct()
-                                .map(TraineeDTO::new)
-                                .collect(Collectors.toSet())
-                )
+        TrainerWithTraineesDTO response = new TrainerWithTraineesDTO(
+                new TrainerDTO(trainer.get()),
+                trainer.get().getTrainings().stream()
+                        .map(Training::getTrainee)
+                        .distinct()
+                        .map(TraineeDTO::new)
+                        .collect(Collectors.toSet())
         );
+
+        logger.info("Returning 200 with trainer {}, transactionID={}", trainer.get().getUsername(), MDC.get("transactionID"));
+        return ResponseEntity.ok(response);
     }
+
 
     @PutMapping("/{username}")
     @Operation(
@@ -145,42 +153,40 @@ public class TrainerController {
     )
     public ResponseEntity<?> updateTrainer(
             @PathVariable String username,
-            @RequestParam String firstName,
-            @RequestParam String lastName,
-            @RequestParam boolean isActive,
+            @RequestBody UpdateTrainerRequest request,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
-    ) {
+    ) throws NotFoundException, ForbiddenOperationException {
         logger.info("PUT /trainers/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         Optional<Trainer> trainer = gymFacade.selectTrainerByUserName(username);
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("You are not logged in as user: {}, cannot update, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            throw new ForbiddenOperationException("You are not logged in as this trainer");
         }
 
         if (trainer.isEmpty()) {
             logger.warn("Your username \"{}\" is not in database, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new NotFoundException("Trainer not found");
         }
 
-        trainer.get().setFirstName(firstName);
-        trainer.get().setLastName(lastName);
-        trainer.get().setActive(isActive);
+        trainer.get().setFirstName(request.getFirstName());
+        trainer.get().setLastName(request.getLastName());
+        trainer.get().setActive(request.isActive());
 
         gymFacade.updateTrainer(trainer.get());
 
         return ResponseEntity.ok(Map.of("Trainer", new TrainerDTO(trainer.get())));
     }
 
-    @PatchMapping("/{username}/activate")
+    @PatchMapping("/{username}/active")
     @Operation(
             summary = "Activate or deactivate trainer (only for self)",
             responses = {
                     @ApiResponse(
                             responseCode = "200",
                             description = "Trainer active status updated successfully",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
+                            content = @Content(mediaType = "application/json", schema = @Schema(type = "object", additionalPropertiesSchema = String.class))
                     ),
                     @ApiResponse(
                             responseCode = "403",
@@ -194,31 +200,29 @@ public class TrainerController {
                     )
             }
     )
-    public ResponseEntity<?> activateTrainer(
+    public ResponseEntity<?> updateActiveStatus(
             @PathVariable String username,
-            @RequestParam boolean isActive,
+            @RequestBody UpdateActiveRequest activeRequest,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
-    ) {
+    ) throws NotFoundException, ForbiddenOperationException {
         logger.info("PATCH /trainers/{}/activate called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("User {} tried to change active status for {}, transactionID={}", user.getUsername(), username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "You can only change your own active status"));
+            throw new ForbiddenOperationException("You can only change your own active status");
         }
 
         Optional<Trainer> trainer = gymFacade.selectTrainerByUserName(username);
 
         if (trainer.isEmpty()) {
             logger.warn("Trainer {} not found, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Trainer not found"));
+            throw new NotFoundException("Trainer not found");
         }
 
-        trainer.get().setActive(isActive);
+        trainer.get().setActive(activeRequest.getIsActive());
         gymFacade.updateTrainer(trainer.get());
 
-        logger.info("Trainer {} active status updated to {}, transactionID={}", username, isActive, MDC.get("transactionID"));
+        logger.info("Trainer {} active status updated to {}, transactionID={}", username, activeRequest.getIsActive(), MDC.get("transactionID"));
         return ResponseEntity.ok(Map.of("message", "Trainer active status updated successfully"));
     }
 
@@ -229,7 +233,10 @@ public class TrainerController {
                     @ApiResponse(
                             responseCode = "200",
                             description = "Returns a list of trainings",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
+                            content = @Content(
+                                    mediaType = "application/json",
+                                    schema = @Schema(implementation = TrainingDTO.class, type = "array")
+                            )
                     ),
                     @ApiResponse(
                             responseCode = "403",
@@ -249,13 +256,12 @@ public class TrainerController {
             @RequestParam(required = false) LocalDate periodTo,
             @RequestParam(required = false) String traineeName,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
-    ) {
+    ) throws ForbiddenOperationException {
         logger.info("GET /trainers/{}/trainings called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!username.equals(user.getUsername())) {
             logger.warn("You can only view your own trainings, user={}, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "You can only view your own trainings"));
+            throw new ForbiddenOperationException("You can only view your own trainings");
         }
 
         var trainings = gymFacade.getTrainerTrainings(username, traineeName, periodFrom, periodTo)

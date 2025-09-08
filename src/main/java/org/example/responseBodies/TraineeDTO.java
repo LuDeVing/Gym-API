@@ -1,16 +1,26 @@
 package org.example.responseBodies;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.example.model.Trainee;
-import org.example.model.Trainer;
 
 import java.time.LocalDate;
-import java.util.List;
 
+@Schema(name = "TraineeDTO", description = "Data transfer object representing a trainee")
 public class TraineeDTO {
+
+    @Schema(description = "Trainee's first name")
     private String firstName;
+
+    @Schema(description = "Trainee's last name")
     private String lastName;
+
+    @Schema(description = "Trainee's date of birth", type = "string", format = "date")
     private LocalDate dateOfBirth;
+
+    @Schema(description = "Trainee's address")
     private String address;
+
+    @Schema(description = "Whether the trainee is active")
     private boolean active;
 
     public TraineeDTO(Trainee trainee) {

@@ -1,5 +1,7 @@
 package org.example;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.example.requestBodies.CreateTraineeRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,9 +31,17 @@ class GymApiApplicationTests {
 
 	@BeforeEach
 	void setup() throws Exception {
+
+		CreateTraineeRequest request = new CreateTraineeRequest();
+		request.setFirstName("FNM");
+		request.setLastName("LNM");
+
+		ObjectMapper objectMapper = new ObjectMapper();
+		String requestJson = objectMapper.writeValueAsString(request);
+
 		MvcResult result = mockMvc.perform(post("/trainees")
-						.param("firstName", "FNM")
-						.param("lastName", "LNM"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(requestJson))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.username").value("FNM.LNM"))
 				.andExpect(jsonPath("$.password").exists())
@@ -51,12 +61,13 @@ class GymApiApplicationTests {
 		mockMvc.perform(get("/trainees/{username}", username)
 						.header("Authorization", authHeader()))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.Trainee.firstName").value("FNM"))
-				.andExpect(jsonPath("$.Trainee.lastName").value("LNM"));
+				.andExpect(jsonPath("$.trainee.firstName").value("FNM"))
+				.andExpect(jsonPath("$.trainee.lastName").value("LNM"));
+
 	}
 
 	@Test
-	void login_withWrongPassword_returns401() throws Exception {
+	void login_withWrongPassword_returns403() throws Exception {
 		String loginJson = String.format("""
             {
                 "username": "%s",
@@ -67,8 +78,8 @@ class GymApiApplicationTests {
 		mockMvc.perform(post("/auth/login")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content(loginJson))
-				.andExpect(status().isUnauthorized())
-				.andExpect(jsonPath("$.message").value("Invalid username or password"));
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.error").value("Invalid username or password"));
 	}
 
 	@Test
@@ -92,7 +103,7 @@ class GymApiApplicationTests {
 		mockMvc.perform(get("/trainees/{username}", username)
 						.header("Authorization", authHeader()))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.Trainee.firstName").value("FNM"));
+				.andExpect(jsonPath("$.trainee.firstName").value("FNM"));
 	}
 
 	@Test

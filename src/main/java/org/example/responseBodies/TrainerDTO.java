@@ -1,12 +1,21 @@
 package org.example.responseBodies;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.example.model.Trainer;
-import org.example.model.TrainingType;
 
+@Schema(description = "Data transfer object representing a trainer")
 public class TrainerDTO {
+
+    @Schema(description = "Trainer's username")
     private String username;
+
+    @Schema(description = "Trainer's first name")
     private String firstName;
+
+    @Schema(description = "Trainer's last name")
     private String lastName;
+
+    @Schema(description = "Trainer's specialization")
     private String specialization;
 
     public TrainerDTO(Trainer trainer) {

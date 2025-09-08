@@ -4,16 +4,18 @@ package org.example.controllers;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.media.SchemaProperty;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.example.exceptions.ForbiddenOperationException;
+import org.example.exceptions.NotFoundException;
 import org.example.facade.GymFacade;
 import org.example.model.Trainee;
 import org.example.model.Training;
 import org.example.model.User;
-import org.example.responseBodies.TraineeDTO;
-import org.example.responseBodies.TrainerDTO;
-import org.example.responseBodies.TrainingDTO;
+import org.example.requestBodies.CreateTraineeRequest;
+import org.example.requestBodies.UpdateActiveRequest;
+import org.example.requestBodies.UpdateTraineeRequest;
+import org.example.responseBodies.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -53,17 +55,15 @@ public class TraineeController {
             }
     )
     public ResponseEntity<Map<String, String>> createTrainee(
-            @RequestParam String firstName,
-            @RequestParam String lastName,
-            @RequestParam(required = false) LocalDate dateOfBirth,
-            @RequestParam(required = false) String address
+            @RequestBody CreateTraineeRequest request
     ) {
 
         User user = new User();
-        user.setFirstName(firstName);
-        user.setLastName(lastName);
+        user.setFirstName(request.getFirstName());
+        user.setLastName(request.getLastName());
         user.setActive(true);
-        Trainee trainee = gymFacade.createTrainee(user, dateOfBirth, address);
+
+        Trainee trainee = gymFacade.createTrainee(user, request.getDateOfBirth(), request.getAddress());
 
         Map<String, String> result = new HashMap<>();
         result.put("username", trainee.getUsername());
@@ -80,7 +80,7 @@ public class TraineeController {
                     @ApiResponse(
                             responseCode = "200",
                             description = "Successfully returned profile information",
-                            content = @Content(mediaType = "application/json")
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = TraineeWithTrainersDTO.class))
                     ),
                     @ApiResponse(
                             responseCode = "403",
@@ -94,15 +94,15 @@ public class TraineeController {
                     )
             }
     )
-    public ResponseEntity<?> getTrainee(
+    public ResponseEntity<TraineeWithTrainersDTO> getTrainee(
             @PathVariable String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
-    ) {
-        logger.info("GET /trainee/{} called, transactionID={}", username, MDC.get("transactionID"));
+    ) throws ForbiddenOperationException {
+        logger.info("GET /trainees/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())){
             logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            throw new ForbiddenOperationException("Forbidden to get as current user");
         }
 
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
@@ -115,9 +115,8 @@ public class TraineeController {
         logger.info("Returning 200 with trainee {}, transactionID={}", trainee.get().getUsername(), MDC.get("transactionID"));
 
         return ResponseEntity.ok(
-                Map.of(
-                        "Trainee", new TraineeDTO(trainee.get()),
-                        "Trainers", trainee.get().getTrainings().stream()
+                new TraineeWithTrainersDTO(new TraineeDTO(trainee.get()),
+                        trainee.get().getTrainings().stream()
                                 .map(Training::getTrainer)
                                 .distinct()
                                 .map(TrainerDTO::new)
@@ -150,45 +149,40 @@ public class TraineeController {
                     )
             }
     )
-    public ResponseEntity<?> updateTrainee(
+    public ResponseEntity<TraineeDTO> updateTrainee(
             @PathVariable String username,
-            @RequestParam String firstName,
-            @RequestParam String lastName,
-            @RequestParam(required = false) LocalDate dateOfBirth,
-            @RequestParam(required = false) String address,
-            @RequestParam boolean isActive,
-
+            @RequestBody UpdateTraineeRequest request,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
-    ){
+    ) throws NotFoundException, ForbiddenOperationException {
 
-        logger.info("PUT /trainee/{} called, transactionID={}", username, MDC.get("transactionID"));
+        logger.info("PUT /trainees/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
 
-        if (!Objects.equals(username, user.getUsername())){
+        if (!Objects.equals(username, user.getUsername())) {
             logger.warn("You are not logged in as user: {}, cannot update, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            throw new ForbiddenOperationException("Forbidden to get as current user");
         }
 
-        if(trainee.isEmpty()){
+        if (trainee.isEmpty()) {
             logger.warn("Your username \"{}\" is not in database, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new NotFoundException("User not found");
         }
 
-        trainee.get().setFirstName(firstName);
-        trainee.get().setLastName(lastName);
-        trainee.get().setActive(isActive);
+        Trainee t = trainee.get();
+        t.setFirstName(request.getFirstName());
+        t.setLastName(request.getLastName());
+        t.setActive(request.isActive());
 
-        if (dateOfBirth != null)
-            trainee.get().setDateOfBirth(dateOfBirth);
+        if (request.getDateOfBirth() != null)
+            t.setDateOfBirth(request.getDateOfBirth());
 
-        if (address != null)
-            trainee.get().setAddress(address);
+        if (request.getAddress() != null)
+            t.setAddress(request.getAddress());
 
-        gymFacade.updateTrainee(trainee.get());
+        gymFacade.updateTrainee(t);
 
-        return ResponseEntity.status(HttpStatus.OK).body(Map.of("Trainee", new TraineeDTO(trainee.get())));
-
+        return ResponseEntity.ok(new TraineeDTO(t));
     }
 
     @DeleteMapping("/{username}")
@@ -198,10 +192,7 @@ public class TraineeController {
                     @ApiResponse(
                             responseCode = "204",
                             description = "Successfully deleted trainee information",
-                            content = @Content(
-                                    mediaType = "application/json",
-                                    schema = @Schema(implementation = TraineeDTO.class)
-                            )
+                            content = @Content
                     ),
                     @ApiResponse(
                             responseCode = "403",
@@ -218,21 +209,17 @@ public class TraineeController {
     public ResponseEntity<?> deleteTrainee(
             @PathVariable String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
-    ) {
-        logger.info("DELETE /trainee/{} called, transactionID={}", username, MDC.get("transactionID"));
+    ) throws ForbiddenOperationException, NotFoundException {
+        logger.info("DELETE /trainees/{} called, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
-            logger.warn("User {} tried to delete another trainee, transactionID={}", user.getUsername(), MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "You can only delete your own profile"));
+            throw new ForbiddenOperationException("You can only access your own profile");
         }
 
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
 
         if (trainee.isEmpty()) {
-            logger.warn("Trainee {} not found, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Trainee not found"));
+            throw new NotFoundException("Trainee does not exist");
         }
 
         gymFacade.deleteTrainee(trainee.get().getUserId());
@@ -249,45 +236,44 @@ public class TraineeController {
                     @ApiResponse(
                             responseCode = "200",
                             description = "Trainee active status updated successfully",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
+                            content = @Content(mediaType = "application/json", schema = @Schema(type = "object", additionalPropertiesSchema = String.class))
                     ),
                     @ApiResponse(
                             responseCode = "403",
                             description = "User is not allowed to change other trainee's status",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
+                            content = @Content(mediaType = "application/json")
                     ),
                     @ApiResponse(
                             responseCode = "404",
                             description = "Trainee not found",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
+                            content = @Content(mediaType = "application/json")
                     )
             }
     )
-    public ResponseEntity<?> activateTrainee(
+    public ResponseEntity<?> updateActiveStatus(
             @PathVariable String username,
-            @RequestParam boolean isActive,
+            @RequestBody UpdateActiveRequest isActiveRequest,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
-    ) {
-        logger.info("PATCH /trainee/activate called for {}, transactionID={}", username, MDC.get("transactionID"));
+    ) throws NotFoundException, ForbiddenOperationException {
+        logger.info("PATCH /trainees/activate called for {}, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("User {} tried to change active status for {}, transactionID={}", user.getUsername(), username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Map.of("message", "You can only change your own active status"));
+            throw new ForbiddenOperationException("Forbidden to get as current user");
         }
 
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
 
         if (trainee.isEmpty()) {
             logger.warn("Trainee {} not found, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(Map.of("message", "Trainee not found"));
+            throw new NotFoundException("User not found");
+
         }
 
-        trainee.get().setActive(isActive);
+        trainee.get().setActive(isActiveRequest.getIsActive());
         gymFacade.updateTrainee(trainee.get());
 
-        logger.info("Trainee {} active status updated to {}, transactionID={}", username, isActive, MDC.get("transactionID"));
+        logger.info("Trainee {} active status updated to {}, transactionID={}", username, isActiveRequest.getIsActive(), MDC.get("transactionID"));
         return ResponseEntity.ok(Map.of("message", "Trainee active status updated successfully"));
 
     }
@@ -299,7 +285,7 @@ public class TraineeController {
                     @ApiResponse(
                             responseCode = "200",
                             description = "Returns a set of trainers not assigned to trainee",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = GetTrainersResponse.class))
                     ),
                     @ApiResponse(
                             responseCode = "403",
@@ -316,24 +302,24 @@ public class TraineeController {
     public ResponseEntity<?> getNotAssignedTrainers(
             @PathVariable String username,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
-    ) {
-        logger.info("GET /trainee/not-assigned called for {}, transactionID={}", username, MDC.get("transactionID"));
+    ) throws NotFoundException, ForbiddenOperationException {
+        logger.info("GET /trainees/not-assigned called for {}, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            throw new ForbiddenOperationException("Forbidden to get as current user");
         }
 
         Optional<Trainee> trainee = gymFacade.selectByTraineeName(username);
         if (trainee.isEmpty()) {
             logger.warn("Trainee {} not found, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new NotFoundException("User not found");
         }
 
         var trainers = gymFacade.getUnsignedTrainers(username).stream()
                 .filter(User::isActive).map(TrainerDTO::new).collect(Collectors.toSet());
 
-        return ResponseEntity.ok(Map.of("Trainers", trainers));
+        return ResponseEntity.ok(new GetTrainersResponse(trainers));
     }
 
     @GetMapping("{username}/trainings")
@@ -343,7 +329,7 @@ public class TraineeController {
                     @ApiResponse(
                             responseCode = "200",
                             description = "Returns a list of trainings",
-                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = Map.class))
+                            content = @Content(mediaType = "application/json", schema = @Schema(implementation = TraineeTrainingsResponse.class))
                     ),
                     @ApiResponse(
                             responseCode = "403",
@@ -363,27 +349,27 @@ public class TraineeController {
             @RequestParam(required = false) LocalDate periodTo,
             @RequestParam(required = false) String trainerName,
             @AuthenticationPrincipal org.springframework.security.core.userdetails.User user
-    ) {
-        logger.info("GET /trainee/trainings called for {}, transactionID={}", username, MDC.get("transactionID"));
+    ) throws ForbiddenOperationException, NotFoundException {
+        logger.info("GET /trainees/trainings called for {}, transactionID={}", username, MDC.get("transactionID"));
 
         if (!Objects.equals(username, user.getUsername())) {
             logger.warn("You are not logged in as user: {}, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            throw new ForbiddenOperationException("Forbidden to get as current user");
         }
 
         var trainee = gymFacade.selectByTraineeName(username);
         if (trainee.isEmpty()) {
             logger.warn("Trainee {} not found, transactionID={}", username, MDC.get("transactionID"));
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+            throw new NotFoundException("User not found");
         }
 
-        var trainings = Optional.ofNullable(gymFacade.getTraineeTrainings(username, trainerName, periodFrom, periodTo))
+        List<TrainingDTO> trainings = Optional.ofNullable(gymFacade.getTraineeTrainings(username, trainerName, periodFrom, periodTo))
                 .orElse(List.of())
                 .stream()
                 .map(TrainingDTO::new)
                 .toList();
 
-        return ResponseEntity.ok(Map.of("Trainings", trainings));
+        return ResponseEntity.ok(new TraineeTrainingsResponse(trainings));
     }
 
 }
